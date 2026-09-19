@@ -1,9 +1,6 @@
 package main
 
 import (
-	"fmt"
-	"os"
-
 	"github.com/spf13/cobra"
 	backupcmd "github.com/sumwatshade/valheimctl/cmd/backup"
 	initcmd "github.com/sumwatshade/valheimctl/cmd/init"
@@ -11,6 +8,8 @@ import (
 	startcmd "github.com/sumwatshade/valheimctl/cmd/start"
 	statuscmd "github.com/sumwatshade/valheimctl/cmd/status"
 	stopcmd "github.com/sumwatshade/valheimctl/cmd/stop"
+	backupsvc "github.com/sumwatshade/valheimctl/internal/backup"
+	serversvc "github.com/sumwatshade/valheimctl/internal/server"
 )
 
 type rootCommand struct {
@@ -29,23 +28,23 @@ func newRootCmd(a *app) *rootCommand {
 		},
 	}
 
-	cmd.AddCommand(initcmd.NewCommand(a))
-	cmd.AddCommand(startcmd.NewCommand(a))
-	cmd.AddCommand(stopcmd.NewCommand(a))
-	cmd.AddCommand(statuscmd.NewCommand(a))
-	cmd.AddCommand(registercmd.NewCommand(a))
-	cmd.AddCommand(backupcmd.NewCommand(a))
+	serverSvc := serversvc.NewService(a.rootDir, a.systemctlPath, a.serviceDir)
+	serverSvc.RuntimeOS = a.runtimeOS
+	serverSvc.OSReleasePath = a.osReleasePath
+	serverSvc.PackageManagerPath = a.packageManagerPath
+	serverSvc.SteamcmdPath = a.steamcmdPath
+	backupSvc := backupsvc.NewService(a.rootDir)
+
+	cmd.AddCommand(initcmd.NewCommand(serverSvc))
+	cmd.AddCommand(startcmd.NewCommand(serverSvc))
+	cmd.AddCommand(stopcmd.NewCommand(serverSvc))
+	cmd.AddCommand(statuscmd.NewCommand(serverSvc))
+	cmd.AddCommand(registercmd.NewCommand(serverSvc))
+	cmd.AddCommand(backupcmd.NewCommand(backupSvc))
 
 	return &rootCommand{Command: cmd, app: a}
 }
 
 func (r *rootCommand) Execute() error {
 	return r.Command.Execute()
-}
-
-func main() {
-	if err := newRootCmd(newApp(".", "", "")).Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
-		os.Exit(1)
-	}
 }

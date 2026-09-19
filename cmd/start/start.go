@@ -7,7 +7,7 @@ import (
 	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func NewCommand(s cli.Service) *cobra.Command {
+func NewCommand(s cli.ServerService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "start",
 		Short: "Start the tracked Valheim server",

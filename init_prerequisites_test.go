@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	serversvc "github.com/sumwatshade/valheimctl/internal/server"
 )
 
 func TestInitInstallsRequiredPackagesAndSteamCMDForDebian(t *testing.T) {
@@ -28,13 +30,13 @@ func TestInitInstallsRequiredPackagesAndSteamCMDForDebian(t *testing.T) {
 		t.Fatalf("writing fake steamcmd: %v", err)
 	}
 
-	app := newApp(root, "", "")
-	app.runtimeOS = "linux"
-	app.osReleasePath = osReleasePath
-	app.packageManagerPath = aptPath
-	app.steamcmdPath = steamcmdPath
+	svc := serversvc.NewService(root, "", "")
+	svc.RuntimeOS = "linux"
+	svc.OSReleasePath = osReleasePath
+	svc.PackageManagerPath = aptPath
+	svc.SteamcmdPath = steamcmdPath
 
-	if err := app.init(); err != nil {
+	if err := svc.Init(); err != nil {
 		t.Fatalf("init returned error: %v", err)
 	}
 
@@ -57,11 +59,11 @@ func TestInitRejectsUnsupportedLinuxDistribution(t *testing.T) {
 		t.Fatalf("writing os-release: %v", err)
 	}
 
-	app := newApp(root, "", "")
-	app.runtimeOS = "linux"
-	app.osReleasePath = osReleasePath
+	svc := serversvc.NewService(root, "", "")
+	svc.RuntimeOS = "linux"
+	svc.OSReleasePath = osReleasePath
 
-	err := app.init()
+	err := svc.Init()
 	if err == nil {
 		t.Fatal("expected unsupported distro error")
 	}

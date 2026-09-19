@@ -6,11 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	backupsvc "github.com/sumwatshade/valheimctl/internal/backup"
 )
 
 func TestBackupCreateListAndApply(t *testing.T) {
 	root := t.TempDir()
 	app := newApp(root, "", "")
+	svc := app.backupSvc
 	worldDir := filepath.Join(root, "worlds_local", "Dedicated")
 	if err := os.MkdirAll(filepath.Join(worldDir, "chunks"), 0o755); err != nil {
 		t.Fatalf("mkdir world dir: %v", err)
@@ -22,8 +25,8 @@ func TestBackupCreateListAndApply(t *testing.T) {
 		t.Fatalf("write chunk: %v", err)
 	}
 
-	if err := app.createBackup("alpha"); err != nil {
-		t.Fatalf("createBackup returned error: %v", err)
+	if err := svc.Create("alpha"); err != nil {
+		t.Fatalf("backup create returned error: %v", err)
 	}
 
 	listCmd := newRootCmd(app)
@@ -41,8 +44,8 @@ func TestBackupCreateListAndApply(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("changed"), 0o600); err != nil {
 		t.Fatalf("overwrite level.dat: %v", err)
 	}
-	if err := app.applyBackup("alpha"); err != nil {
-		t.Fatalf("applyBackup returned error: %v", err)
+	if err := svc.Apply("alpha"); err != nil {
+		t.Fatalf("backup apply returned error: %v", err)
 	}
 	b, err := os.ReadFile(filepath.Join(worldDir, "level.dat"))
 	if err != nil {
@@ -55,8 +58,8 @@ func TestBackupCreateListAndApply(t *testing.T) {
 
 func TestBackupApplyRejectsMissingBackup(t *testing.T) {
 	root := t.TempDir()
-	app := newApp(root, "", "")
-	if err := app.applyBackup("missing"); err == nil {
-		t.Fatal("applyBackup() succeeded for missing backup; want error")
+	svc := backupsvc.NewService(root)
+	if err := svc.Apply("missing"); err == nil {
+		t.Fatal("Apply() succeeded for missing backup; want error")
 	}
 }

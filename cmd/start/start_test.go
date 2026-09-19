@@ -1,5 +1,4 @@
 package startcmd
-package startcmd
 
 import (
 	"bytes"
@@ -18,13 +17,13 @@ func (f *startFake) Start() (string, error) {
 	f.started = true
 	return "server started", nil
 }
-func (f *startFake) Stop() (string, error) { return "", nil }
-func (f *startFake) Status() (string, error) { return "", nil }
+func (f *startFake) Stop() (string, error)                                    { return "", nil }
+func (f *startFake) Status() (string, error)                                  { return "", nil }
 func (f *startFake) Register(serverName, serverDir, description string) error { return nil }
-func (f *startFake) Backup() (string, error) { return "", nil }
-func (f *startFake) BackupList() ([]cli.BackupSummary, error) { return nil, nil }
-func (f *startFake) BackupApply(name string) error { return nil }
-func (f *startFake) BackupCreate(name string) error { return nil }
+func (f *startFake) Backup() (string, error)                                  { return "", nil }
+func (f *startFake) BackupList() ([]cli.BackupSummary, error)                 { return nil, nil }
+func (f *startFake) BackupApply(name string) error                            { return nil }
+func (f *startFake) BackupCreate(name string) error                           { return nil }
 
 func TestStartCommandRunsStart(t *testing.T) {
 	service := &startFake{}

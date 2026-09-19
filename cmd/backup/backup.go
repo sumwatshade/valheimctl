@@ -8,7 +8,7 @@ import (
 	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func NewCommand(s cli.Service) *cobra.Command {
+func NewCommand(s cli.BackupService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "backup",
 		Short: "Manage Valheim world backups",
@@ -30,7 +30,7 @@ func NewCommand(s cli.Service) *cobra.Command {
 	return cmd
 }
 
-func newListCommand(s cli.Service) *cobra.Command {
+func newListCommand(s cli.BackupService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List existing Valheim backups",
@@ -53,7 +53,7 @@ func newListCommand(s cli.Service) *cobra.Command {
 	return cmd
 }
 
-func newApplyCommand(s cli.Service) *cobra.Command {
+func newApplyCommand(s cli.BackupService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "apply <name>",
 		Short: "Apply a named backup to the active world save directory",
@@ -69,7 +69,7 @@ func newApplyCommand(s cli.Service) *cobra.Command {
 	return cmd
 }
 
-func newCreateCommand(s cli.Service) *cobra.Command {
+func newCreateCommand(s cli.BackupService) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "create <name>",
 		Aliases: []string{"snapshot"},
