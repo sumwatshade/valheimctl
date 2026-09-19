@@ -283,10 +283,6 @@ func (a *app) register(serverName, serverDir, description string) error {
 	return writeJSON(a.statePath(), st)
 }
 
-func (a *app) backup() (string, error) {
-	return "valheimctl backup: deferred; backup behavior requires source, destination, retention, and restore details before implementation.", nil
-}
-
 func (a *app) runSystemctl(args ...string) error {
 	cmd := exec.Command(a.systemctlPath, args...)
 	out, err := cmd.CombinedOutput()

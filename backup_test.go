@@ -2,22 +2,61 @@ package main
 
 import (
 	"bytes"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
 
-func TestBackupCommandReportsDeferred(t *testing.T) {
+func TestBackupCreateListAndApply(t *testing.T) {
 	root := t.TempDir()
-	cmd := newRootCmd(newApp(root, "", ""))
-	buf := &bytes.Buffer{}
-	cmd.SetOut(buf)
-	cmd.SetErr(buf)
-	cmd.SetArgs([]string{"backup"})
-
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("backup command returned error: %v", err)
+	app := newApp(root, "", "")
+	worldDir := filepath.Join(root, "worlds_local", "Dedicated")
+	if err := os.MkdirAll(filepath.Join(worldDir, "chunks"), 0o755); err != nil {
+		t.Fatalf("mkdir world dir: %v", err)
 	}
-	if !strings.Contains(buf.String(), "deferred") {
-		t.Fatalf("backup output = %q; want deferred message", buf.String())
+	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("live"), 0o600); err != nil {
+		t.Fatalf("write level.dat: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(worldDir, "chunks", "a.chunk"), []byte("chunk-data"), 0o600); err != nil {
+		t.Fatalf("write chunk: %v", err)
+	}
+
+	if err := app.createBackup("alpha"); err != nil {
+		t.Fatalf("createBackup returned error: %v", err)
+	}
+
+	listCmd := newRootCmd(app)
+	buf := &bytes.Buffer{}
+	listCmd.SetOut(buf)
+	listCmd.SetErr(buf)
+	listCmd.SetArgs([]string{"backup", "list"})
+	if err := listCmd.Execute(); err != nil {
+		t.Fatalf("backup list returned error: %v", err)
+	}
+	if !strings.Contains(buf.String(), "alpha") {
+		t.Fatalf("backup list output = %q; want backup name", buf.String())
+	}
+
+	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("changed"), 0o600); err != nil {
+		t.Fatalf("overwrite level.dat: %v", err)
+	}
+	if err := app.applyBackup("alpha"); err != nil {
+		t.Fatalf("applyBackup returned error: %v", err)
+	}
+	b, err := os.ReadFile(filepath.Join(worldDir, "level.dat"))
+	if err != nil {
+		t.Fatalf("read restored level.dat: %v", err)
+	}
+	if string(b) != "live" {
+		t.Fatalf("restored world file = %q; want %q", string(b), "live")
+	}
+}
+
+func TestBackupApplyRejectsMissingBackup(t *testing.T) {
+	root := t.TempDir()
+	app := newApp(root, "", "")
+	if err := app.applyBackup("missing"); err == nil {
+		t.Fatal("applyBackup() succeeded for missing backup; want error")
 	}
 }
