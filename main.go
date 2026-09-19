@@ -1,5 +1,253 @@
 package main
 
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+)
+
+type app struct {
+	rootDir       string
+	systemctlPath string
+	serviceDir    string
+}
+
+type state struct {
+	Initialized bool   `json:"initialized"`
+	Running     bool   `json:"running"`
+	ServerName  string `json:"server_name,omitempty"`
+	ServerDir   string `json:"server_dir,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
+func newApp(rootDir, systemctlPath, serviceDir string) *app {
+	if rootDir == "" {
+		rootDir = "."
+	}
+	if systemctlPath == "" {
+		systemctlPath = "systemctl"
+	}
+	if serviceDir == "" {
+		serviceDir = filepath.Join(rootDir, "etc", "systemd", "system")
+	}
+	return &app{
+		rootDir:       rootDir,
+		systemctlPath: systemctlPath,
+		serviceDir:    serviceDir,
+	}
+}
+
+func (a *app) configDir() string {
+	return filepath.Join(a.rootDir, ".valheimctl")
+}
+
+func (a *app) statePath() string {
+	return filepath.Join(a.configDir(), "state.json")
+}
+
+func (a *app) metadataPath() string {
+	return filepath.Join(a.configDir(), "server.json")
+}
+
+func (a *app) ensureInitialized() error {
+	if err := os.MkdirAll(a.configDir(), 0o755); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(a.serviceDir, 0o755); err != nil {
+		return err
+	}
+	if _, err := os.Stat(a.statePath()); err == nil {
+		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	st := state{Initialized: true, Running: false}
+	return writeJSON(a.statePath(), st)
+}
+
+func writeJSON(path string, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, b, 0o600)
+}
+
+func readJSON(path string, v any) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+func (a *app) init() error {
+	return a.ensureInitialized()
+}
+
+func (a *app) status() (string, error) {
+	if _, err := os.Stat(a.statePath()); err != nil {
+		return "valheimctl status: not initialized", nil
+	}
+	var st state
+	if err := readJSON(a.statePath(), &st); err != nil {
+		return "", err
+	}
+	if !st.Initialized {
+		return "valheimctl status: not initialized", nil
+	}
+	statusText := "stopped"
+	if st.Running {
+		statusText = "running"
+	}
+	return fmt.Sprintf("valheimctl status: %s (%s)", statusText, st.ServerName), nil
+}
+
+func (a *app) start() (string, error) {
+	if err := a.ensureInitialized(); err != nil {
+		return "", err
+	}
+	st := state{Initialized: true, Running: true}
+	if _, err := os.Stat(a.metadataPath()); err == nil {
+		var meta state
+		if err := readJSON(a.metadataPath(), &meta); err == nil {
+			st.ServerName = meta.ServerName
+			st.ServerDir = meta.ServerDir
+			st.Description = meta.Description
+		}
+	}
+	if err := writeJSON(a.statePath(), st); err != nil {
+		return "", err
+	}
+	return "valheimctl start: server started", nil
+}
+
+func (a *app) stop() (string, error) {
+	if _, err := os.Stat(a.statePath()); err != nil {
+		return "", errors.New("server not initialized")
+	}
+	st := state{Initialized: true, Running: false}
+	if err := writeJSON(a.statePath(), st); err != nil {
+		return "", err
+	}
+	return "valheimctl stop: server stopped", nil
+}
+
+func (a *app) register(serverName, serverDir, description string) error {
+	if err := a.ensureInitialized(); err != nil {
+		return err
+	}
+	if serverName == "" {
+		return errors.New("server name is required")
+	}
+	if serverDir == "" {
+		serverDir = a.rootDir
+	}
+	if description == "" {
+		description = serverName
+	}
+
+	meta := state{
+		Initialized: true,
+		Running:     false,
+		ServerName:  serverName,
+		ServerDir:   serverDir,
+		Description: description,
+	}
+	if err := writeJSON(a.metadataPath(), meta); err != nil {
+		return err
+	}
+
+	serviceFile := filepath.Join(a.serviceDir, serverName+".service")
+	serviceText := fmt.Sprintf("[Unit]\nDescription=%s\nAfter=network.target\n\n[Service]\nType=simple\nWorkingDirectory=%s\nExecStart=/bin/sh -c 'echo valheimctl placeholder'\nRestart=on-failure\n\n[Install]\nWantedBy=multi-user.target\n", description, serverDir)
+	if err := os.WriteFile(serviceFile, []byte(serviceText), 0o644); err != nil {
+		return err
+	}
+
+	if err := a.runSystemctl("daemon-reload"); err != nil {
+		return err
+	}
+	if err := a.runSystemctl("enable", serverName+".service"); err != nil {
+		return err
+	}
+
+	st := state{Initialized: true, Running: false, ServerName: serverName, ServerDir: serverDir, Description: description}
+	return writeJSON(a.statePath(), st)
+}
+
+func (a *app) backup() (string, error) {
+	return "valheimctl backup: deferred; backup behavior requires source, destination, retention, and restore details before implementation.", nil
+}
+
+func (a *app) runSystemctl(args ...string) error {
+	cmd := exec.Command(a.systemctlPath, args...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("systemctl %s failed: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
 func main() {
-  println("Hello, world!")
+	if len(os.Args) < 2 {
+		fmt.Println("usage: valheimctl <init|start|stop|status|register|backup>")
+		os.Exit(1)
+	}
+
+	app := newApp(".", "", "")
+	cmd := os.Args[1]
+
+	switch cmd {
+	case "init":
+		if err := app.init(); err != nil {
+			fmt.Fprintf(os.Stderr, "init failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("valheimctl init: initialized")
+	case "start":
+		msg, err := app.start()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "start failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(msg)
+	case "stop":
+		msg, err := app.stop()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "stop failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(msg)
+	case "status":
+		msg, err := app.status()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "status failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(msg)
+	case "register":
+		if len(os.Args) < 5 {
+			fmt.Println("usage: valheimctl register <server-name> <server-dir> <description>")
+			os.Exit(1)
+		}
+		if err := app.register(os.Args[2], os.Args[3], os.Args[4]); err != nil {
+			fmt.Fprintf(os.Stderr, "register failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("valheimctl register: server registered")
+	case "backup":
+		msg, err := app.backup()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "backup failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println(msg)
+	default:
+		fmt.Printf("unsupported command: %s\n", cmd)
+		os.Exit(1)
+	}
 }
