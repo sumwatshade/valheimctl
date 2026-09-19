@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -9,7 +10,21 @@ import (
 
 func TestInitCommandInitializesState(t *testing.T) {
 	root := t.TempDir()
-	cmd := newRootCmd(newApp(root, "", ""))
+	app := newApp(root, "", "")
+	app.runtimeOS = "linux"
+	app.osReleasePath = filepath.Join(root, "os-release")
+	if err := os.WriteFile(app.osReleasePath, []byte("NAME=\"Debian GNU/Linux\"\nID=debian\nID_LIKE=debian\n"), 0o644); err != nil {
+		t.Fatalf("writing os-release: %v", err)
+	}
+	app.packageManagerPath = filepath.Join(root, "apt-get")
+	app.steamcmdPath = filepath.Join(root, "steamcmd")
+	if err := os.WriteFile(app.packageManagerPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake apt-get: %v", err)
+	}
+	if err := os.WriteFile(app.steamcmdPath, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatalf("writing fake steamcmd: %v", err)
+	}
+	cmd := newRootCmd(app)
 	buf := &bytes.Buffer{}
 	cmd.SetOut(buf)
 	cmd.SetErr(buf)

@@ -7,13 +7,18 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
 type app struct {
-	rootDir       string
-	systemctlPath string
-	serviceDir    string
+	rootDir            string
+	systemctlPath      string
+	serviceDir         string
+	runtimeOS          string
+	osReleasePath      string
+	packageManagerPath string
+	steamcmdPath       string
 }
 
 type state struct {
@@ -35,9 +40,13 @@ func newApp(rootDir, systemctlPath, serviceDir string) *app {
 		serviceDir = filepath.Join(rootDir, "etc", "systemd", "system")
 	}
 	return &app{
-		rootDir:       rootDir,
-		systemctlPath: systemctlPath,
-		serviceDir:    serviceDir,
+		rootDir:            rootDir,
+		systemctlPath:      systemctlPath,
+		serviceDir:         serviceDir,
+		runtimeOS:          runtime.GOOS,
+		osReleasePath:      "/etc/os-release",
+		packageManagerPath: "apt-get",
+		steamcmdPath:       "steamcmd",
 	}
 }
 
@@ -86,7 +95,102 @@ func readJSON(path string, v any) error {
 }
 
 func (a *app) init() error {
-	return a.ensureInitialized()
+	if err := a.ensureInitialized(); err != nil {
+		return err
+	}
+	return a.ensurePrereqs()
+}
+
+func (a *app) ensurePrereqs() error {
+	osName := a.runtimeOS
+	if osName == "" {
+		osName = runtime.GOOS
+	}
+	if osName != "linux" {
+		return fmt.Errorf("unsupported operating system %q: valheimctl currently supports Linux with systemd", osName)
+	}
+
+	distro, err := a.detectLinuxDistro()
+	if err != nil {
+		return err
+	}
+
+	switch distro {
+	case "debian", "ubuntu":
+		return a.ensureDebianPrereqs()
+	default:
+		return fmt.Errorf("unsupported Linux distribution: %s", distro)
+	}
+}
+
+func (a *app) detectLinuxDistro() (string, error) {
+	b, err := os.ReadFile(a.osReleasePath)
+	if err != nil {
+		return "", fmt.Errorf("unable to read %s: %w", a.osReleasePath, err)
+	}
+
+	id := ""
+	idLike := ""
+	for _, line := range strings.Split(string(b), "\n") {
+		line = strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(line, "ID="):
+			id = strings.Trim(strings.TrimPrefix(line, "ID="), "\"")
+		case strings.HasPrefix(line, "ID_LIKE="):
+			idLike = strings.Trim(strings.TrimPrefix(line, "ID_LIKE="), "\"")
+		}
+	}
+
+	if id == "" && idLike == "" {
+		return "", fmt.Errorf("unsupported Linux distribution: unable to determine OS from %s", a.osReleasePath)
+	}
+
+	for _, candidate := range []string{id, idLike} {
+		for _, v := range strings.FieldsFunc(candidate, func(r rune) bool { return r == ' ' || r == '\t' || r == '|' }) {
+			switch strings.TrimSpace(v) {
+			case "debian", "ubuntu", "linuxmint":
+				return "debian", nil
+			}
+		}
+	}
+
+	if id != "" {
+		return strings.TrimSpace(id), nil
+	}
+	return strings.TrimSpace(idLike), nil
+}
+
+func (a *app) ensureDebianPrereqs() error {
+	packages := []string{"libatomic1", "libpulse-dev", "libpulse0", "steamcmd"}
+	if err := a.installPackages(packages...); err != nil {
+		return err
+	}
+	if err := a.ensureSteamcmd(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (a *app) installPackages(packages ...string) error {
+	if len(packages) == 0 {
+		return nil
+	}
+	cmd := exec.Command(a.packageManagerPath, append([]string{"install", "-y"}, packages...)...)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("package installation failed: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	return nil
+}
+
+func (a *app) ensureSteamcmd() error {
+	if _, err := os.Stat(a.steamcmdPath); err == nil {
+		return nil
+	}
+	if _, err := exec.LookPath("steamcmd"); err == nil {
+		return nil
+	}
+	return errors.New("steamcmd is not installed or not available on PATH")
 }
 
 func (a *app) status() (string, error) {
