@@ -66,4 +66,32 @@ Run the current regression suite with:
 go test ./...
 ```
 
+## Valheim configuration contract
+
+The project now includes an internal configuration package that accepts a Valheim server config file and converts the supported server settings into the equivalent command-line arguments for the server binary.
+
+Example config:
+
+```yaml
+name: "My server"
+port: 2456
+world: "Dedicated"
+password: "Secret"
+public: 1
+savedir: "/tmp/valheim-saves"
+logfile: "/tmp/valheim.log"
+saveinterval: 1800
+backups: 4
+backupshort: 7200
+backuplong: 43200
+crossplay: false
+instanceid: "1"
+preset: hard
+modifiers:
+  raids: none
+setkey: nomap
+```
+
+This package validates required values, allowed enums, numeric ranges, and backup/timing conditions before the server configuration is used.
+
 This project is intentionally small and straightforward: keep commands thin, business logic centralized, and tests focused on observable behavior.
