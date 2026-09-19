@@ -1,17 +1,18 @@
-package main
+package initcmd
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func newInitCommand(a *app) *cobra.Command {
+func NewCommand(s cli.Service) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "init",
 		Short: "Initialize valheimctl state",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.init(); err != nil {
+			if err := s.Init(); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "valheimctl init: initialized")

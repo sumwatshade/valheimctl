@@ -1,17 +1,18 @@
-package main
+package startcmd
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func newStopCommand(a *app) *cobra.Command {
+func NewCommand(s cli.Service) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "stop",
-		Short: "Stop the tracked Valheim server",
+		Use:   "start",
+		Short: "Start the tracked Valheim server",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			msg, err := a.stop()
+			msg, err := s.Start()
 			if err != nil {
 				return err
 			}

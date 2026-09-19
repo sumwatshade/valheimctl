@@ -1,17 +1,18 @@
-package main
+package statuscmd
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func newStartCommand(a *app) *cobra.Command {
+func NewCommand(s cli.Service) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "start",
-		Short: "Start the tracked Valheim server",
+		Use:   "status",
+		Short: "Report the Valheim server status",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			msg, err := a.start()
+			msg, err := s.Status()
 			if err != nil {
 				return err
 			}

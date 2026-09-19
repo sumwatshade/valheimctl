@@ -1,18 +1,19 @@
-package main
+package registercmd
 
 import (
 	"fmt"
 
 	"github.com/spf13/cobra"
+	"github.com/sumwatshade/valheimctl/internal/cli"
 )
 
-func newRegisterCommand(a *app) *cobra.Command {
+func NewCommand(s cli.Service) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "register <server-name> <server-dir> <description>",
 		Short: "Register a systemd service for the Valheim server",
 		Args:  cobra.ExactArgs(3),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := a.register(args[0], args[1], args[2]); err != nil {
+			if err := s.Register(args[0], args[1], args[2]); err != nil {
 				return err
 			}
 			fmt.Fprintln(cmd.OutOrStdout(), "valheimctl register: server registered")

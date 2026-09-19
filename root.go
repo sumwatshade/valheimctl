@@ -5,6 +5,12 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	backupcmd "github.com/sumwatshade/valheimctl/cmd/backup"
+	initcmd "github.com/sumwatshade/valheimctl/cmd/init"
+	registercmd "github.com/sumwatshade/valheimctl/cmd/register"
+	startcmd "github.com/sumwatshade/valheimctl/cmd/start"
+	statuscmd "github.com/sumwatshade/valheimctl/cmd/status"
+	stopcmd "github.com/sumwatshade/valheimctl/cmd/stop"
 )
 
 type rootCommand struct {
@@ -23,12 +29,12 @@ func newRootCmd(a *app) *rootCommand {
 		},
 	}
 
-	cmd.AddCommand(newInitCommand(a))
-	cmd.AddCommand(newStartCommand(a))
-	cmd.AddCommand(newStopCommand(a))
-	cmd.AddCommand(newStatusCommand(a))
-	cmd.AddCommand(newRegisterCommand(a))
-	cmd.AddCommand(newBackupCommand(a))
+	cmd.AddCommand(initcmd.NewCommand(a))
+	cmd.AddCommand(startcmd.NewCommand(a))
+	cmd.AddCommand(stopcmd.NewCommand(a))
+	cmd.AddCommand(statuscmd.NewCommand(a))
+	cmd.AddCommand(registercmd.NewCommand(a))
+	cmd.AddCommand(backupcmd.NewCommand(a))
 
 	return &rootCommand{Command: cmd, app: a}
 }
