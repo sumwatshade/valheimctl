@@ -1,7 +1,10 @@
 package backup
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -18,23 +21,85 @@ type Metadata struct {
 	Worlds    []string  `json:"worlds,omitempty"`
 }
 
-type Service struct {
-	RootDir string
+type readFS interface {
+	fs.FS
+	fs.ReadDirFS
+	fs.ReadFileFS
+	fs.StatFS
 }
 
-func NewService(rootDir string) *Service {
-	return &Service{RootDir: rootDir}
+type writableFS interface {
+	MkdirAll(path string, perm fs.FileMode) error
+	WriteFile(name string, data []byte, perm fs.FileMode) error
+	RemoveAll(path string) error
+}
+
+type FileSystem interface {
+	readFS
+	writableFS
+}
+
+type osFS struct{}
+
+func (osFS) ReadDir(name string) ([]fs.DirEntry, error) {
+	entries, err := os.ReadDir(name)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]fs.DirEntry, len(entries))
+	for i, entry := range entries {
+		out[i] = entry
+	}
+	return out, nil
+}
+
+func (osFS) Open(name string) (fs.File, error)    { return os.Open(name) }
+func (osFS) ReadFile(name string) ([]byte, error) { return os.ReadFile(name) }
+func (osFS) WriteFile(name string, data []byte, perm fs.FileMode) error {
+	return os.WriteFile(name, data, perm)
+}
+func (osFS) MkdirAll(path string, perm fs.FileMode) error { return os.MkdirAll(path, perm) }
+func (osFS) RemoveAll(path string) error                  { return os.RemoveAll(path) }
+func (osFS) Stat(name string) (fs.FileInfo, error)        { return os.Stat(name) }
+
+type Service struct {
+	RootDir string
+	fs      FileSystem
+}
+
+func NewService(rootDir string, fsys ...FileSystem) *Service {
+	service := &Service{RootDir: rootDir, fs: osFS{}}
+	if len(fsys) > 0 && fsys[0] != nil {
+		service.fs = fsys[0]
+	}
+	return service
 }
 
 func (s *Service) StoreDir() string {
 	return filepath.Join(s.RootDir, ".valheimctl", "backups")
 }
 
+func readJSONFile(fsys FileSystem, path string, v any) error {
+	b, err := fsys.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(b, v)
+}
+
+func writeJSONFile(fsys FileSystem, path string, v any) error {
+	b, err := json.MarshalIndent(v, "", "  ")
+	if err != nil {
+		return err
+	}
+	return fsys.WriteFile(path, b, 0o600)
+}
+
 func (s *Service) List() ([]Metadata, error) {
 	backupsDir := s.StoreDir()
-	entries, err := os.ReadDir(backupsDir)
+	entries, err := s.fs.ReadDir(backupsDir)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
@@ -47,15 +112,15 @@ func (s *Service) List() ([]Metadata, error) {
 		}
 		metaPath := filepath.Join(backupsDir, entry.Name(), "meta.json")
 		meta := Metadata{Name: entry.Name()}
-		if _, err := os.ReadFile(metaPath); err == nil {
-			if err := config.ReadJSON(metaPath, &meta); err != nil {
+		if _, err := s.fs.Stat(metaPath); err == nil {
+			if err := readJSONFile(s.fs, metaPath, &meta); err != nil {
 				return nil, err
 			}
-		} else if !os.IsNotExist(err) {
+		} else if !errors.Is(err, fs.ErrNotExist) {
 			return nil, err
 		}
 		if meta.CreatedAt.IsZero() {
-			if info, err := os.Stat(filepath.Join(backupsDir, entry.Name())); err == nil {
+			if info, err := s.fs.Stat(filepath.Join(backupsDir, entry.Name())); err == nil {
 				meta.CreatedAt = info.ModTime().UTC()
 			}
 		}
@@ -72,22 +137,22 @@ func (s *Service) Create(name string) error {
 		return fmt.Errorf("backup name is required")
 	}
 	worldsDir := filepath.Join(s.RootDir, "worlds_local")
-	if _, err := os.Stat(worldsDir); err != nil {
+	if _, err := s.fs.Stat(worldsDir); err != nil {
 		return fmt.Errorf("save directory %q does not exist: %w", worldsDir, err)
 	}
 
 	backupDir := filepath.Join(s.StoreDir(), name)
-	if _, err := os.Stat(backupDir); err == nil {
+	if _, err := s.fs.Stat(backupDir); err == nil {
 		return fmt.Errorf("backup %q already exists", name)
-	} else if !os.IsNotExist(err) {
+	} else if !errors.Is(err, fs.ErrNotExist) {
 		return err
 	}
-	if err := os.MkdirAll(backupDir, 0o755); err != nil {
+	if err := s.fs.MkdirAll(backupDir, 0o755); err != nil {
 		return err
 	}
 
 	worlds := make([]string, 0)
-	entries, err := os.ReadDir(worldsDir)
+	entries, err := s.fs.ReadDir(worldsDir)
 	if err != nil {
 		return err
 	}
@@ -99,7 +164,7 @@ func (s *Service) Create(name string) error {
 		worlds = append(worlds, worldName)
 		src := filepath.Join(worldsDir, worldName)
 		dst := filepath.Join(backupDir, worldName)
-		if err := copyTree(src, dst); err != nil {
+		if err := s.copyTree(src, dst); err != nil {
 			return fmt.Errorf("copy world %q to backup: %w", worldName, err)
 		}
 	}
@@ -112,7 +177,7 @@ func (s *Service) Create(name string) error {
 		CreatedAt: time.Now().UTC(),
 		Worlds:    worlds,
 	}
-	if err := config.WriteJSON(filepath.Join(backupDir, "meta.json"), meta); err != nil {
+	if err := writeJSONFile(s.fs, filepath.Join(backupDir, "meta.json"), meta); err != nil {
 		return err
 	}
 	return nil
@@ -123,17 +188,17 @@ func (s *Service) Apply(name string) error {
 		return fmt.Errorf("backup name is required")
 	}
 	backupDir := filepath.Join(s.StoreDir(), name)
-	if _, err := os.Stat(backupDir); err != nil {
+	if _, err := s.fs.Stat(backupDir); err != nil {
 		return fmt.Errorf("backup %q not found", name)
 	}
 
 	worldsDir := filepath.Join(s.RootDir, "worlds_local")
-	if err := os.MkdirAll(worldsDir, 0o755); err != nil {
+	if err := s.fs.MkdirAll(worldsDir, 0o755); err != nil {
 		return err
 	}
 
 	worlds := make([]string, 0)
-	entries, err := os.ReadDir(backupDir)
+	entries, err := s.fs.ReadDir(backupDir)
 	if err != nil {
 		return err
 	}
@@ -148,15 +213,18 @@ func (s *Service) Apply(name string) error {
 
 	primary := s.primaryWorldName()
 	targetWorld := primary
-	if _, err := os.Stat(filepath.Join(worldsDir, targetWorld)); err != nil {
+	if _, err := s.fs.Stat(filepath.Join(worldsDir, targetWorld)); err != nil {
 		targetWorld = worlds[0]
 	}
 
 	src := filepath.Join(backupDir, targetWorld)
-	if _, err := os.Stat(src); err != nil {
+	if _, err := s.fs.Stat(src); err != nil {
 		return fmt.Errorf("backup %q does not contain world %q", name, targetWorld)
 	}
-	if err := copyTree(src, filepath.Join(worldsDir, targetWorld)); err != nil {
+	if err := s.fs.RemoveAll(filepath.Join(worldsDir, targetWorld)); err != nil {
+		return err
+	}
+	if err := s.copyTree(src, filepath.Join(worldsDir, targetWorld)); err != nil {
 		return err
 	}
 	return nil
@@ -167,6 +235,37 @@ func (s *Service) primaryWorldName() string {
 		return st.ServerName
 	}
 	return "Dedicated"
+}
+
+func (s *Service) copyTree(src, dst string) error {
+	entries, err := s.fs.ReadDir(src)
+	if err != nil {
+		return err
+	}
+	if err := s.fs.MkdirAll(dst, 0o755); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		fullPath := filepath.Join(src, entry.Name())
+		targetPath := filepath.Join(dst, entry.Name())
+		if entry.IsDir() {
+			if err := s.copyTree(fullPath, targetPath); err != nil {
+				return err
+			}
+			continue
+		}
+		data, err := s.fs.ReadFile(fullPath)
+		if err != nil {
+			return err
+		}
+		if err := s.fs.MkdirAll(filepath.Dir(targetPath), 0o755); err != nil {
+			return err
+		}
+		if err := s.fs.WriteFile(targetPath, data, 0o600); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (s *Service) Describe() (string, error) {

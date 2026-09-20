@@ -1,7 +1,6 @@
-package main
+package backup
 
 import (
-	"bytes"
 	"io"
 	"io/fs"
 	"os"
@@ -10,8 +9,6 @@ import (
 	"testing"
 	"testing/fstest"
 	"time"
-
-	backupsvc "github.com/sumwatshade/valheimctl/internal/backup"
 )
 
 type testFS struct {
@@ -233,8 +230,7 @@ func (i testFileInfo) Sys() any           { return nil }
 
 func TestBackupCreateListAndApply(t *testing.T) {
 	root := t.TempDir()
-	app := newApp(root, "", "")
-	svc := app.backupSvc
+	svc := NewService(root)
 	worldDir := filepath.Join(root, "worlds_local", "Dedicated")
 	if err := os.MkdirAll(filepath.Join(worldDir, "chunks"), 0o755); err != nil {
 		t.Fatalf("mkdir world dir: %v", err)
@@ -250,16 +246,12 @@ func TestBackupCreateListAndApply(t *testing.T) {
 		t.Fatalf("backup create returned error: %v", err)
 	}
 
-	listCmd := newRootCmd(app)
-	buf := &bytes.Buffer{}
-	listCmd.SetOut(buf)
-	listCmd.SetErr(buf)
-	listCmd.SetArgs([]string{"backup", "list"})
-	if err := listCmd.Execute(); err != nil {
+	items, err := svc.List()
+	if err != nil {
 		t.Fatalf("backup list returned error: %v", err)
 	}
-	if !strings.Contains(buf.String(), "alpha") {
-		t.Fatalf("backup list output = %q; want backup name", buf.String())
+	if len(items) == 0 || items[0].Name != "alpha" {
+		t.Fatalf("backup list = %#v; want alpha at the front", items)
 	}
 
 	if err := os.WriteFile(filepath.Join(worldDir, "level.dat"), []byte("changed"), 0o600); err != nil {
@@ -279,7 +271,7 @@ func TestBackupCreateListAndApply(t *testing.T) {
 
 func TestBackupApplyRejectsMissingBackup(t *testing.T) {
 	root := t.TempDir()
-	svc := backupsvc.NewService(root)
+	svc := NewService(root)
 	if err := svc.Apply("missing"); err == nil {
 		t.Fatal("Apply() succeeded for missing backup; want error")
 	}
@@ -295,7 +287,7 @@ func TestBackupServiceAcceptsInjectedFilesystem(t *testing.T) {
 		"/valheim/.valheimctl/backups/alpha/meta.json":                &fstest.MapFile{Data: []byte(`{"name":"alpha","created_at":"2024-01-01T00:00:00Z"}`)},
 	})
 
-	svc := backupsvc.NewService(root, fsys)
+	svc := NewService(root, fsys)
 	if err := svc.Apply("alpha"); err != nil {
 		t.Fatalf("apply with injected fs returned error: %v", err)
 	}
