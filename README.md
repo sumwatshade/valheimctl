@@ -13,14 +13,83 @@ The project uses Cobra as the command framework and keeps command setup separate
 - Root command and command registration live in [root.go](root.go)
 - Shared runtime configuration and state helpers live in [main.go](main.go)
 - Each subcommand is implemented as its own file:
-  - [init.go](init.go)
-  - [start.go](start.go)
-  - [stop.go](stop.go)
-  - [status.go](status.go)
-  - [register.go](register.go)
-  - [backup.go](backup.go)
+  - [init.go](cmd/init/init.go)
+  - [start.go](cmd/start/start.go)
+  - [stop.go](cmd/stop/stop.go)
+  - [status.go](cmd/status/status.go)
+  - [register.go](cmd/register/register.go)
+  - [backup.go](cmd/backup/backup.go)
+  - [install.go](cmd/install/install.go)
+  - [update.go](cmd/update/update.go)
+  - [restart.go](cmd/restart/restart.go)
+  - [logs.go](cmd/logs/logs.go)
+  - [version.go](cmd/version/version.go)
+  - [config.go](cmd/config/config.go)
+  - [world.go](cmd/world/world.go)
+  - [reinstall.go](cmd/reinstall/reinstall.go)
+  - [diagnostics.go](cmd/diagnostics/diagnostics.go)
 
 This layout keeps the command surface discoverable and makes it easier to add new commands without growing a single monolithic dispatcher.
+
+## CLI commands
+
+### Lifecycle commands
+
+| Command | Purpose |
+|---------|---------|
+| `init` | Initialize valheimctl state and check prerequisites |
+| `start` | Start the tracked Valheim server |
+| `stop` | Stop the tracked Valheim server |
+| `status` | Report the Valheim server status |
+| `register <name> <dir> <desc>` | Register a systemd service for the Valheim server |
+| `restart` | Restart the Valheim server systemd service |
+
+### Server installation and update
+
+| Command | Purpose |
+|---------|---------|
+| `install` | Install Valheim dedicated server binaries via SteamCMD (AppID 896660) |
+| `update [--validate] [--start]` | Update server binaries via SteamCMD; backs up saves first |
+| `reinstall [--dry-run\|--execute]` | Clean reinstall preserving worlds and backups |
+
+### Logs and version
+
+| Command | Purpose |
+|---------|---------|
+| `logs [--follow] [--lines N]` | Show journalctl logs for the server service |
+| `version` | Report version information about the server installation |
+
+### Configuration
+
+| Command | Purpose |
+|---------|---------|
+| `config` | Show the current server configuration |
+| `config validate` | Validate the server configuration |
+
+### World management
+
+| Command | Purpose |
+|---------|---------|
+| `world [list]` | List save directories and backup candidates |
+| `world inspect <name>` | Inspect a specific world directory |
+| `world backup [label]` | Create a backup of the save root |
+| `world restore <archive> [--dry-run]` | Restore a world from a backup archive (dry-run by default) |
+| `world verify <archive>` | Verify a backup archive's integrity |
+
+### Backup management
+
+| Command | Purpose |
+|---------|---------|
+| `backup` | List existing backups (describe) |
+| `backup list` | List existing backups with timestamps |
+| `backup apply <name>` | Apply a named backup to the active world save directory |
+| `backup create <name>` | Create a backup of all world saves (alias: `snapshot`) |
+
+### Diagnostics
+
+| Command | Purpose |
+|---------|---------|
+| `diagnostics` | Collect diagnostic information about the server setup |
 
 ## Shared app context
 
@@ -49,11 +118,11 @@ Tests are organized by command rather than keeping all cases in one file. This m
 
 Examples:
 
-- [init_test.go](init_test.go)
-- [start_test.go](start_test.go)
-- [stop_test.go](stop_test.go)
-- [register_test.go](register_test.go)
-- [backup_test.go](backup_test.go)
+- [init_test.go](cmd/init/init_test.go)
+- [start_test.go](cmd/start/start_test.go)
+- [stop_test.go](cmd/stop/stop_test.go)
+- [register_test.go](cmd/register/register_test.go)
+- [backup_test.go](cmd/backup/backup_test.go)
 - [root_test.go](root_test.go)
 
 The test suite favors real filesystem behavior over mock-heavy assertions. It creates temporary directories, writes realistic state/config files, and validates the command outputs and side effects that matter in practice.

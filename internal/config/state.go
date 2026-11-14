@@ -38,8 +38,10 @@ func EnsureInitialized(rootDir, serviceDir string) error {
 	if err := os.MkdirAll(RootDir(rootDir), 0o755); err != nil {
 		return err
 	}
-	if err := os.MkdirAll(serviceDir, 0o755); err != nil {
-		return err
+	if serviceDir != "" {
+		if err := os.MkdirAll(serviceDir, 0o755); err != nil {
+			return err
+		}
 	}
 	if _, err := os.Stat(StatePath(rootDir)); err == nil {
 		return nil

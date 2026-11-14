@@ -63,8 +63,9 @@ func (osFS) RemoveAll(path string) error                  { return os.RemoveAll(
 func (osFS) Stat(name string) (fs.FileInfo, error)        { return os.Stat(name) }
 
 type Service struct {
-	RootDir string
-	fs      FileSystem
+	RootDir   string
+	BackupDir string
+	fs        FileSystem
 }
 
 func NewService(rootDir string, fsys ...FileSystem) *Service {
@@ -76,6 +77,9 @@ func NewService(rootDir string, fsys ...FileSystem) *Service {
 }
 
 func (s *Service) StoreDir() string {
+	if s.BackupDir != "" {
+		return s.BackupDir
+	}
 	return filepath.Join(s.RootDir, ".valheimctl", "backups")
 }
 

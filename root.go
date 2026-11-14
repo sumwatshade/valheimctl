@@ -3,6 +3,15 @@ package main
 import (
 	"github.com/spf13/cobra"
 	backupcmd "github.com/sumwatshade/valheimctl/cmd/backup"
+	configcmd "github.com/sumwatshade/valheimctl/cmd/config"
+	diagnosticscmd "github.com/sumwatshade/valheimctl/cmd/diagnostics"
+	installcmd "github.com/sumwatshade/valheimctl/cmd/install"
+	logscmd "github.com/sumwatshade/valheimctl/cmd/logs"
+	reinstallcmd "github.com/sumwatshade/valheimctl/cmd/reinstall"
+	restartcmd "github.com/sumwatshade/valheimctl/cmd/restart"
+	updatecmd "github.com/sumwatshade/valheimctl/cmd/update"
+	versioncmd "github.com/sumwatshade/valheimctl/cmd/version"
+	worldcmd "github.com/sumwatshade/valheimctl/cmd/world"
 	initcmd "github.com/sumwatshade/valheimctl/cmd/init"
 	registercmd "github.com/sumwatshade/valheimctl/cmd/register"
 	startcmd "github.com/sumwatshade/valheimctl/cmd/start"
@@ -34,6 +43,7 @@ func newRootCmd(a *app) *rootCommand {
 	serverSvc.PackageManagerPath = a.packageManagerPath
 	serverSvc.SteamcmdPath = a.steamcmdPath
 	backupSvc := backupsvc.NewService(a.rootDir)
+	backupSvc.BackupDir = serverSvc.BackupDir
 
 	cmd.AddCommand(initcmd.NewCommand(serverSvc))
 	cmd.AddCommand(startcmd.NewCommand(serverSvc))
@@ -41,6 +51,17 @@ func newRootCmd(a *app) *rootCommand {
 	cmd.AddCommand(statuscmd.NewCommand(serverSvc))
 	cmd.AddCommand(registercmd.NewCommand(serverSvc))
 	cmd.AddCommand(backupcmd.NewCommand(backupSvc))
+
+	// Full server management commands.
+	cmd.AddCommand(installcmd.NewCommand(serverSvc))
+	cmd.AddCommand(updatecmd.NewCommand(serverSvc))
+	cmd.AddCommand(restartcmd.NewCommand(serverSvc))
+	cmd.AddCommand(logscmd.NewCommand(serverSvc))
+	cmd.AddCommand(versioncmd.NewCommand(serverSvc))
+	cmd.AddCommand(configcmd.NewCommand(serverSvc))
+	cmd.AddCommand(worldcmd.NewCommand(serverSvc))
+	cmd.AddCommand(reinstallcmd.NewCommand(serverSvc))
+	cmd.AddCommand(diagnosticscmd.NewCommand(serverSvc))
 
 	return &rootCommand{Command: cmd, app: a}
 }

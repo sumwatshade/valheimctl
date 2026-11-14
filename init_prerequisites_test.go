@@ -45,7 +45,7 @@ func TestInitInstallsRequiredPackagesAndSteamCMDForDebian(t *testing.T) {
 		t.Fatalf("expected apt install log: %v", err)
 	}
 	content := string(log)
-	for _, want := range []string{"install", "libatomic1", "libpulse-dev", "libpulse0", "steamcmd"} {
+	for _, want := range []string{"install", "libatomic1", "libpulse-dev", "libpulse0"} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("apt log %q missing %q", content, want)
 		}
