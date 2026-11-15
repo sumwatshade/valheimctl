@@ -1,166 +1,89 @@
+
 # valheimctl
 
-Tools to help run and manage Valheim servers, primarily focused on Debian Linux systems.
+A Rust CLI and LAN web interface for managing an existing Valheim dedicated server.
 
-## Overview
+## Current features
 
-`valheimctl` is a small Go CLI for managing a dedicated Valheim server lifecycle. The current structure favors a simple command-oriented design with a shared application context, a Cobra root command, and thin handlers for each subcommand.
+- CLI status, start, stop, and restart
+- Read-only inspection of the configured save directory
+- Full save-directory archive backups
+- Backup verification by reading the gzip and tar archive
+- Backup operation stops the server temporarily if it was running
+- LAN web dashboard
+- HTTP Basic Authentication
+- CSRF token validation on web actions
+- Web start, stop, restart, and backup actions
+- Fixed systemd unit operations; no arbitrary shell command endpoint
 
-## CLI architecture
+## Not implemented yet
 
-The project uses Cobra as the command framework and keeps command setup separate from server behavior.
+- Restore and rollback
+- SteamCMD updates
+- Live log streaming
+- Backup retention and scheduled backups
+- Persistent audit history
+- HTTPS termination
 
-- Root command and command registration live in [root.go](root.go)
-- Shared runtime configuration and state helpers live in [main.go](main.go)
-- Each subcommand is implemented as its own file:
-  - [init.go](cmd/init/init.go)
-  - [start.go](cmd/start/start.go)
-  - [stop.go](cmd/stop/stop.go)
-  - [status.go](cmd/status/status.go)
-  - [register.go](cmd/register/register.go)
-  - [backup.go](cmd/backup/backup.go)
-  - [install.go](cmd/install/install.go)
-  - [update.go](cmd/update/update.go)
-  - [restart.go](cmd/restart/restart.go)
-  - [logs.go](cmd/logs/logs.go)
-  - [version.go](cmd/version/version.go)
-  - [config.go](cmd/config/config.go)
-  - [world.go](cmd/world/world.go)
-  - [reinstall.go](cmd/reinstall/reinstall.go)
-  - [diagnostics.go](cmd/diagnostics/diagnostics.go)
+## Build
 
-This layout keeps the command surface discoverable and makes it easier to add new commands without growing a single monolithic dispatcher.
+Install Rust and Cargo, then:
 
-## CLI commands
+    cargo check
+    cargo test
+    cargo build --release
 
-### Lifecycle commands
+## Configuration
 
-| Command | Purpose |
-|---------|---------|
-| `init` | Initialize valheimctl state and check prerequisites |
-| `start` | Start the tracked Valheim server |
-| `stop` | Stop the tracked Valheim server |
-| `status` | Report the Valheim server status |
-| `register <name> <dir> <desc>` | Register a systemd service for the Valheim server |
-| `restart` | Restart the Valheim server systemd service |
+Copy the example configuration:
 
-### Server installation and update
+    sudo install -o root -g valheimctl -m 0640 \
+      config/valheimctl.example.toml \
+      /etc/valheimctl.toml
 
-| Command | Purpose |
-|---------|---------|
-| `install` | Install Valheim dedicated server binaries via SteamCMD (AppID 896660) |
-| `update [--validate] [--start]` | Update server binaries via SteamCMD; backs up saves first |
-| `reinstall [--dry-run\|--execute]` | Clean reinstall preserving worlds and backups |
+Edit the configuration and set the actual worlds directory, backup directory,
+systemd unit, web bind address, username, password, and CSRF token.
 
-### Logs and version
+Use long, unique random values for both web secrets.
 
-| Command | Purpose |
-|---------|---------|
-| `logs [--follow] [--lines N]` | Show journalctl logs for the server service |
-| `version` | Report version information about the server installation |
+## CLI
 
-### Configuration
+    valheimctl --config /etc/valheimctl.toml status
+    valheimctl --config /etc/valheimctl.toml start
+    valheimctl --config /etc/valheimctl.toml stop
+    valheimctl --config /etc/valheimctl.toml restart
+    valheimctl --config /etc/valheimctl.toml worlds
+    valheimctl --config /etc/valheimctl.toml backup
 
-| Command | Purpose |
-|---------|---------|
-| `config` | Show the current server configuration |
-| `config validate` | Validate the server configuration |
+## Web
 
-### World management
+For initial testing, bind to localhost:
 
-| Command | Purpose |
-|---------|---------|
-| `world [list]` | List save directories and backup candidates |
-| `world inspect <name>` | Inspect a specific world directory |
-| `world backup [label]` | Create a backup of the save root |
-| `world restore <archive> [--dry-run]` | Restore a world from a backup archive (dry-run by default) |
-| `world verify <archive>` | Verify a backup archive's integrity |
+    valheimctl --config /etc/valheimctl.toml web
 
-### Backup management
+Use an SSH tunnel to access it remotely:
 
-| Command | Purpose |
-|---------|---------|
-| `backup` | List existing backups (describe) |
-| `backup list` | List existing backups with timestamps |
-| `backup apply <name>` | Apply a named backup to the active world save directory |
-| `backup create <name>` | Create a backup of all world saves (alias: `snapshot`) |
+    ssh -L 8080:127.0.0.1:8080 your-user@your-valheim-vm
 
-### Diagnostics
+Then browse to:
 
-| Command | Purpose |
-|---------|---------|
-| `diagnostics` | Collect diagnostic information about the server setup |
+    http://127.0.0.1:8080
 
-## Shared app context
+For LAN access, set `web.bind` to the VM's LAN address and port.
+Restrict that port with the VM firewall to your trusted LAN/VLAN.
 
-The `app` type centralizes the runtime state that commands need:
+HTTP Basic Authentication over plain HTTP does not encrypt credentials.
+For routine LAN use, HTTPS through a reverse proxy is recommended.
+Do not expose this service directly to the internet.
 
-- root directory for configuration and state files
-- custom `systemctl` binary path for testing and environment overrides
-- service directory for generated systemd unit files
-- helpers for state initialization, JSON read/write, and service registration
+## Save safety
 
-Commands are intentionally thin wrappers around `app` methods, which keeps the behavior consistent across CLI and tests.
+The application treats the configured save directory as opaque data.
+It does not rename, convert, repair, or delete save files.
 
-## State and service patterns
+Backups archive the entire directory tree. A backup temporarily stops the
+Valheim service if it was running and attempts to start it again afterward.
 
-The tool stores operational state under a local `.valheimctl` directory in the configured root:
-
-- `.valheimctl/state.json` stores lifecycle state like initialization and running status
-- `.valheimctl/server.json` stores server metadata such as name, path, and description
-- generated service files are written under the systemd service directory for the target host
-
-`register` is the place where the CLI creates a service unit and invokes `systemctl enable`, matching the project requirement to support startup registration on Linux systems.
-
-## Testing patterns
-
-Tests are organized by command rather than keeping all cases in one file. This makes it easier to understand what each command does and keeps failures focused.
-
-Examples:
-
-- [init_test.go](cmd/init/init_test.go)
-- [start_test.go](cmd/start/start_test.go)
-- [stop_test.go](cmd/stop/stop_test.go)
-- [register_test.go](cmd/register/register_test.go)
-- [backup_test.go](cmd/backup/backup_test.go)
-- [root_test.go](root_test.go)
-
-The test suite favors real filesystem behavior over mock-heavy assertions. It creates temporary directories, writes realistic state/config files, and validates the command outputs and side effects that matter in practice.
-
-## Local development
-
-Run the current regression suite with:
-
-```bash
-go test ./...
-```
-
-## Valheim configuration contract
-
-The project now includes an internal configuration package that accepts a Valheim server config file and converts the supported server settings into the equivalent command-line arguments for the server binary.
-
-Example config:
-
-```yaml
-name: "My server"
-port: 2456
-world: "Dedicated"
-password: "Secret"
-public: 1
-savedir: "/tmp/valheim-saves"
-logfile: "/tmp/valheim.log"
-saveinterval: 1800
-backups: 4
-backupshort: 7200
-backuplong: 43200
-crossplay: false
-instanceid: "1"
-preset: hard
-modifiers:
-  raids: none
-setkey: nomap
-```
-
-This package validates required values, allowed enums, numeric ranges, and backup/timing conditions before the server configuration is used.
-
-This project is intentionally small and straightforward: keep commands thin, business logic centralized, and tests focused on observable behavior.
+The current backup implementation does not yet provide restore, rollback,
+retention, or a persistent operation log. Keep independent backups until
+those features have been implemented and tested.

@@ -1,0 +1,6 @@
+
+valheimctl ALL=(root) NOPASSWD: /usr/bin/systemctl start valheim.service
+valheimctl ALL=(root) NOPASSWD: /usr/bin/systemctl stop valheim.service
+valheimctl ALL=(root) NOPASSWD: /usr/bin/systemctl restart valheim.service
+valheimctl ALL=(root) NOPASSWD: /usr/bin/systemctl show valheim.service --property=ActiveState --value
+valheimctl ALL=(root) NOPASSWD: /usr/bin/systemctl show valheim.service --property=Description --value

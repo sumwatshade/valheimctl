@@ -1,0 +1,22 @@
+
+[Unit]
+Description=Valheim Control Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=valheimctl
+Group=valheimctl
+ExecStart=/usr/local/bin/valheimctl --config /etc/valheimctl.toml web
+Restart=on-failure
+RestartSec=5
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/valheim
+ReadOnlyPaths=/path/to/valheim/worlds_local
+
+[Install]
+WantedBy=multi-user.target

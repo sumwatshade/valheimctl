@@ -1,0 +1,19 @@
+
+[server]
+name = "Valheim Dedicated Server"
+systemd_unit = "valheim.service"
+
+[worlds]
+directory = "/path/to/valheim/worlds_local"
+
+[backups]
+directory = "/var/backups/valheim"
+
+[web]
+# For SSH-tunnel-only access, use 127.0.0.1:8080.
+# For LAN access, use the VM's LAN IP, e.g. 192.168.1.50:8080.
+bind = "127.0.0.1:8080"
+
+username = "admin"
+password = "CHANGE-THIS-TO-A-LONG-RANDOM-PASSWORD"
+csrf_token = "CHANGE-THIS-TO-A-DIFFERENT-LONG-RANDOM-TOKEN"

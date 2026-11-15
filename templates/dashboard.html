@@ -1,0 +1,80 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Valheim Control</title>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      max-width: 900px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+      background: #f5f5f5;
+      color: #222;
+    }
+    section {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 10px;
+      padding: 1.2rem;
+      margin: 1rem 0;
+    }
+    button {
+      border: 0;
+      border-radius: 6px;
+      padding: .65rem 1rem;
+      margin: .25rem;
+      cursor: pointer;
+      background: #334155;
+      color: white;
+      font-weight: 600;
+    }
+    button.danger { background: #a83232; }
+    button.backup { background: #276749; }
+    code { overflow-wrap: anywhere; }
+    .muted { color: #666; }
+    li { margin: .4rem 0; }
+  </style>
+</head>
+<body>
+  <h1>Valheim Control</h1>
+  <p class="muted">{{server_name}}</p>
+
+  <section>
+    <h2>Server status</h2>
+    <p>State: <strong>{{server_state}}</strong></p>
+    <p>{{server_description}}</p>
+
+    <form method="post" action="/action">
+      <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+      <button name="action" value="start">Start</button>
+      <button name="action" value="stop" class="danger">Stop</button>
+      <button name="action" value="restart">Restart</button>
+    </form>
+  </section>
+
+  <section>
+    <h2>World save directory</h2>
+    <p><code>{{worlds_path}}</code></p>
+    <p>{{worlds_summary}}</p>
+    <ul>
+      {{worlds_list}}
+    </ul>
+  </section>
+
+  <section>
+    <h2>Backups</h2>
+    <p>Create a full archive of the configured save directory.</p>
+    <form method="post" action="/action">
+      <input type="hidden" name="csrf_token" value="{{csrf_token}}">
+      <button name="action" value="backup" class="backup">
+        Create backup
+      </button>
+    </form>
+    <p>{{message}}</p>
+  </section>
+</body>
+</html>
